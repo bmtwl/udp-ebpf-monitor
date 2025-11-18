@@ -8,12 +8,15 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
-// Port will be set at compile time or through defines
-#ifndef TARGET_PORT
-#define TARGET_PORT 5005
+// Port range will be set at compile time
+#ifndef PORT_START
+#define PORT_START 5005
 #endif
 
-// Increase this to use jumbo packets
+#ifndef PORT_END
+#define PORT_END 5005
+#endif
+
 #define MAX_CAPTURE_SIZE 1500
 
 // Define a fixed-size struct to make the verifier happy
@@ -28,19 +31,11 @@ struct event {
 
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 1 << 20); // 1MB ring buffer. Should be more than enough
+    __uint(max_entries, 1 << 24); // Larger ring buffer for multiple ports
 } ring_buffer SEC(".maps");
 
-// Map to store port information (for user-space identification)
-struct {
-    __uint(type, BPF_MAP_TYPE_ARRAY);
-    __uint(max_entries, 1);
-    __type(key, __u32);
-    __type(value, __u32);
-} port_info SEC(".maps");
-
 SEC("xdp")
-int xdp_udp_capture(struct xdp_md *ctx) {
+int xdp_udp_capture_multi(struct xdp_md *ctx) {
     void *data = (void *)(long)ctx->data;
     void *data_end = (void *)(long)ctx->data_end;
 
@@ -63,8 +58,9 @@ int xdp_udp_capture(struct xdp_md *ctx) {
     if (data + sizeof(*eth) + sizeof(*ip) + sizeof(*udp) > data_end)
         return XDP_PASS;
 
-    // Check destination port (this will be set per instance)
-    if (udp->dest != bpf_htons(TARGET_PORT))
+    // Check if destination port is in our range
+    __u16 dest_port = bpf_ntohs(udp->dest);
+    if (dest_port < PORT_START || dest_port > PORT_END)
         return XDP_PASS;
 
     void *payload_start = (void *)(udp + 1);
@@ -88,7 +84,7 @@ int xdp_udp_capture(struct xdp_md *ctx) {
     e->sport = bpf_ntohs(udp->source);
     e->daddr = ip->daddr;
     e->dport = bpf_ntohs(udp->dest);
-    e->payload_len = actual_payload_len; // Store the original actual length
+    e->payload_len = actual_payload_len;
 
     // Copy only the determined safe amount of data into the fixed buffer field
     bpf_probe_read_kernel(e->data, copy_len, payload_start);
