@@ -48,7 +48,7 @@ rm -rf ${BPF_FS_PATH}/${PROGRAM_NAME}_maps
 
 # Compile program for port range
 echo "Compiling eBPF program for port range ${PORT_START}-${PORT_END}..."
-clang -O2 -target bpf -g -DPORT_START=${PORT_START} -DPORT_END=${PORT_END} -c udp_capture_multi.c -o ${PROGRAM_NAME}.o
+clang -O2 -target bpf -g -DPORT_START=${PORT_START} -DPORT_END=${PORT_END} -c udp_capture.c -o ${PROGRAM_NAME}.o
 
 # Check if compilation was successful
 if [ $? -ne 0 ]; then
