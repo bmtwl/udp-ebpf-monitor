@@ -1,33 +1,25 @@
 #!/bin/bash
 # stop_capture.sh
 
-if [ $# -lt 1 ]; then
-    echo "Usage: $0 <port> [interface]"
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <port_start> <port_end> [interface]"
+    echo "Example: $0 5005 5010 eth0"
     exit 1
 fi
 
-PORT=${1}
-INTERFACE=${2:-eth0}
+PORT_START=${1}
+PORT_END=${2}
+INTERFACE=${3:-eth0}
 BPF_FS_PATH="/sys/fs/bpf"
-PROGRAM_NAME="udp_monitor_${PORT}"
+PROGRAM_NAME="udp_monitor_${PORT_START}_${PORT_END}"
 
-echo "Stopping UDP capture for port ${PORT}..."
+echo "Removing UDP monitor for port range ${PORT_START}-${PORT_END} from interface ${INTERFACE}..."
 
-# Detach from interface
-echo "Detaching from interface ${INTERFACE}..."
-sudo bpftool net detach xdp dev ${INTERFACE} 2>/dev/null || true
-
-# Wait a moment for detachment to complete
-sleep 1
+# Detach the XDP program from the interface
+bpftool net detach xdp dev ${INTERFACE} 2>/dev/null || true
 
 # Remove pinned objects
-echo "Removing pinned objects..."
-sudo rm -f ${BPF_FS_PATH}/${PROGRAM_NAME}
-sudo rm -rf ${BPF_FS_PATH}/${PROGRAM_NAME}_maps
+rm -f ${BPF_FS_PATH}/${PROGRAM_NAME}
+rm -rf ${BPF_FS_PATH}/${PROGRAM_NAME}_maps
 
-# Verify removal
-if [ -f ${BPF_FS_PATH}/${PROGRAM_NAME} ] || [ -d ${BPF_FS_PATH}/${PROGRAM_NAME}_maps ]; then
-    echo "Warning: Some objects may not have been fully removed"
-else
-    echo "Successfully removed UDP capture for port ${PORT}"
-fi
+echo "Successfully removed UDP monitor for port range ${PORT_START}-${PORT_END}"
