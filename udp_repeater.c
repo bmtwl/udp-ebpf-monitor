@@ -29,6 +29,7 @@ static volatile bool exiting = false;
 static bool debug_mode = false;
 static int start_port = 0;
 static int end_port = 0;
+static struct in_addr target_ip_addr;
 
 static void sig_handler(int sig) {
     exiting = true;
@@ -50,7 +51,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz) {
     memset(&dest_addr, 0, sizeof(dest_addr));
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(e->dport);
-    dest_addr.sin_addr.s_addr = e->daddr;
+    dest_addr.sin_addr = target_ip_addr;
 
     // Send the payload
     ssize_t sent = sendto(*send_sock, e->data, e->payload_len, 0,
@@ -65,7 +66,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz) {
             printf("[%ld] Forwarded %u bytes from %s:%d to %s:%d\n",
                    time(NULL), e->payload_len,
                    inet_ntoa(*(struct in_addr *)&e->saddr), e->sport,
-                   inet_ntoa(*(struct in_addr *)&e->daddr), e->dport);
+                   inet_ntoa(target_ip_addr), e->dport);
         }
     }
 
@@ -148,6 +149,12 @@ int main(int argc, char **argv) {
 
     target_ip = argv[optind + 1];
 
+    // Convert target IP to in_addr structure for use in callback
+    if (inet_pton(AF_INET, target_ip, &target_ip_addr) <= 0) {
+        fprintf(stderr, "Invalid target IP address: %s\n", target_ip);
+        return 1;
+    }
+
     // Set up signal handler for graceful exit
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
@@ -198,19 +205,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to recreate ring buffer manager with send socket\n");
         close(ringbuf_fd);
         close(send_sock);
-        return 1;
-    }
-
-    // Set up target address
-    struct sockaddr_in target_addr_base;
-    memset(&target_addr_base, 0, sizeof(target_addr_base));
-    target_addr_base.sin_family = AF_INET;
-
-    if (inet_pton(AF_INET, target_ip, &target_addr_base.sin_addr) <= 0) {
-        fprintf(stderr, "Invalid target IP address: %s\n", target_ip);
-        close(send_sock);
-        ring_buffer__free(rb);
-        close(ringbuf_fd);
         return 1;
     }
 
