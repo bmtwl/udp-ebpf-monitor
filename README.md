@@ -42,7 +42,7 @@ graph TD
 
 ## Use
 
-### Clone, build the useland stuff and make the scripts executable
+### Clone, build the userland stuff and make the scripts executable
 
 ```bash
 cd /opt
@@ -76,7 +76,7 @@ chmod +x *.sh
 
 ```
 
-### Clean up to remove maps and 
+### Clean up to remove maps and stop forwarding
 ```bash
 ./stop_capture.sh 5005 5010 eth0
 ```
